@@ -1,0 +1,871 @@
+import { useState, useRef } from "react";
+
+const DC = {
+  student:  { color:"#3B6D11", bg:"#EAF3DE", border:"#C0DD97", label:"醫學生" },
+  resident: { color:"#854F0B", bg:"#FAEEDA", border:"#FAC775", label:"住院醫師" },
+  attending:{ color:"#A32D2D", bg:"#FCEBEB", border:"#F7C1C1", label:"主治醫師" },
+};
+const MODES = [
+  { id:"guided",  icon:"ti-book",        label:"引導模式",  desc:"系統會指引下一步，適合初學者" },
+  { id:"free",    icon:"ti-stethoscope", label:"自由模式",  desc:"自行選擇所有檢查與處置，無提示" },
+  { id:"timed",   icon:"ti-clock",       label:"限時模式",  desc:"每個步驟限時作答，壓力測試", locked:true },
+];
+const DIFFS = [
+  { id:"student",  emoji:"🟢", label:"醫學生",  labelEn:"Medical Student", color:"#3B6D11", bg:"#EAF3DE", border:"#C0DD97", desc:"較明顯線索、關鍵數值標示、有提示說明" },
+  { id:"resident", emoji:"🟡", label:"住院醫師", labelEn:"Resident",        color:"#854F0B", bg:"#FAEEDA", border:"#FAC775", desc:"標準臨床情境，無額外提示" },
+  { id:"attending",emoji:"🔴", label:"主治醫師", labelEn:"Attending",       color:"#A32D2D", bg:"#FCEBEB", border:"#F7C1C1", desc:"複雜合併症、時間壓力、干擾資訊" },
+];
+
+const CTG_REACTIVE = `<svg width="100%" viewBox="0 0 680 260" role="img" xmlns="http://www.w3.org/2000/svg"><rect width="680" height="260" fill="#fff8f0"/><g stroke="#f0c8a0" stroke-width="0.5"><line x1="40" y1="50" x2="660" y2="50"/><line x1="40" y1="70" x2="660" y2="70"/><line x1="40" y1="90" x2="660" y2="90"/><line x1="40" y1="110" x2="660" y2="110"/><line x1="40" y1="130" x2="660" y2="130"/><line x1="40" y1="150" x2="660" y2="150"/><line x1="40" y1="40" x2="40" y2="160"/><line x1="120" y1="40" x2="120" y2="160"/><line x1="200" y1="40" x2="200" y2="160"/><line x1="280" y1="40" x2="280" y2="160"/><line x1="360" y1="40" x2="360" y2="160"/><line x1="440" y1="40" x2="440" y2="160"/><line x1="520" y1="40" x2="520" y2="160"/><line x1="600" y1="40" x2="600" y2="160"/><line x1="660" y1="40" x2="660" y2="160"/></g><text x="34" y="53" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">160</text><text x="34" y="93" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">140</text><text x="34" y="133" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">120</text><line x1="40" y1="90" x2="660" y2="90" stroke="#e09050" stroke-width="0.8" stroke-dasharray="4,3"/><polyline fill="none" stroke="#c04000" stroke-width="1.5" stroke-linejoin="round" points="40,92 44,89 48,87 52,91 56,93 60,88 64,86 68,90 72,93 76,89 80,86 84,90 88,93 92,88 96,86 100,91 104,94 108,89 112,87 116,91 120,94 124,90 128,87 132,91 136,95 140,89 144,86 148,90 152,93 156,88 160,84 164,80 168,75 172,70 176,67 180,65 184,63 188,65 192,68 196,72 200,76 204,80 208,84 212,87 216,90 220,88 224,86 228,90 232,93 236,88 240,85 244,89 248,92 252,87 256,85 260,89 264,92 268,87 272,85 276,90 280,93 284,88 288,86 292,90 296,94 300,89 304,86 308,90 312,93 316,88 320,86 324,90 328,82 332,77 336,72 340,68 344,65 348,63 352,65 356,69 360,73 364,78 368,83 372,87 376,90 380,88 384,86 388,90 392,93 396,88 400,85 404,89 408,93 412,88 416,85 420,90 424,93 428,88 432,86 436,90 440,94 444,89 448,86 452,90 456,93 460,88 464,85 468,90 472,93 476,88 480,86 484,90 488,93 492,88 496,85 500,90 504,93 508,88 512,85 516,90 520,93 524,88 528,85 532,89 536,92 540,88 544,86 548,90 552,93 556,88 560,85 564,90 568,93 572,88 576,85 580,89 584,92 588,88 592,86 596,90 600,94 604,89 608,86 612,90 616,93 620,88 624,86 628,90 632,94 636,89 640,86 644,90 648,93 652,88 656,86 660,90"/><text x="184" y="57" font-size="11" font-family="sans-serif" fill="#007030" text-anchor="middle">▲ accel</text><line x1="184" y1="59" x2="184" y2="64" stroke="#007030" stroke-width="0.8" stroke-dasharray="2,2"/><text x="350" y="57" font-size="11" font-family="sans-serif" fill="#007030" text-anchor="middle">▲ accel</text><line x1="350" y1="59" x2="350" y2="64" stroke="#007030" stroke-width="0.8" stroke-dasharray="2,2"/><rect x="40" y="40" width="620" height="120" fill="none" stroke="#c08050" stroke-width="1"/><text x="350" y="18" font-size="13" font-family="sans-serif" font-weight="500" text-anchor="middle" fill="#6d3a1a">NST 第一幕（Reactive，正常）</text><text x="40" y="175" font-size="11" font-family="sans-serif" fill="#a06030">0</text><text x="200" y="175" font-size="11" font-family="sans-serif" fill="#a06030">5 min</text><text x="360" y="175" font-size="11" font-family="sans-serif" fill="#a06030">10 min</text><text x="520" y="175" font-size="11" font-family="sans-serif" fill="#a06030">15 min</text><text x="650" y="175" font-size="11" font-family="sans-serif" fill="#a06030">20 min</text><rect x="40" y="185" width="620" height="60" fill="#fff8f0" stroke="#c08050" stroke-width="1"/><line x1="40" y1="215" x2="660" y2="215" stroke="#f0c8a0" stroke-width="0.5"/><line x1="40" y1="230" x2="660" y2="230" stroke="#f0c8a0" stroke-width="0.5"/><text x="34" y="228" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">UA</text><polyline fill="none" stroke="#c04000" stroke-width="1.5" points="40,228 200,228 201,227 204,226 207,228 400,228 401,227 403,226 406,228 660,228"/><text x="350" y="255" font-size="11" font-family="sans-serif" text-anchor="middle" fill="#6d3a1a">無規律宮縮 — NST Reactive ✓</text></svg>`;
+
+const CTG_LATE_DECEL = `<svg width="100%" viewBox="0 0 680 260" role="img" xmlns="http://www.w3.org/2000/svg"><rect width="680" height="260" fill="#fff8f0"/><g stroke="#f0c8a0" stroke-width="0.5"><line x1="40" y1="50" x2="660" y2="50"/><line x1="40" y1="70" x2="660" y2="70"/><line x1="40" y1="90" x2="660" y2="90"/><line x1="40" y1="110" x2="660" y2="110"/><line x1="40" y1="130" x2="660" y2="130"/><line x1="40" y1="150" x2="660" y2="150"/><line x1="40" y1="40" x2="40" y2="160"/><line x1="120" y1="40" x2="120" y2="160"/><line x1="200" y1="40" x2="200" y2="160"/><line x1="280" y1="40" x2="280" y2="160"/><line x1="360" y1="40" x2="360" y2="160"/><line x1="440" y1="40" x2="440" y2="160"/><line x1="520" y1="40" x2="520" y2="160"/><line x1="600" y1="40" x2="600" y2="160"/><line x1="660" y1="40" x2="660" y2="160"/></g><text x="34" y="53" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">160</text><text x="34" y="93" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">140</text><text x="34" y="133" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">120</text><line x1="40" y1="90" x2="660" y2="90" stroke="#e09050" stroke-width="0.8" stroke-dasharray="4,3"/><polyline fill="none" stroke="#c04000" stroke-width="1.5" stroke-linejoin="round" points="40,91 48,90 56,91 64,90 72,91 80,90 88,91 92,92 96,93 100,95 104,98 108,103 112,109 116,115 120,120 124,124 128,126 132,127 136,126 140,123 144,119 148,115 152,110 156,106 160,102 168,97 176,93 184,91 192,90 200,91 204,92 208,94 212,97 216,101 220,107 224,113 228,119 232,123 236,126 240,127 244,126 248,123 252,119 256,114 260,109 264,104 268,99 272,96 280,92 288,90 296,91 304,90 312,91 316,92 320,95 324,99 328,104 332,110 336,116 340,120 344,124 348,126 352,127 356,125 360,122 364,118 368,113 372,108 376,103 380,99 388,94 396,91 404,90 412,91 420,90 428,91 432,93 436,96 440,101 444,107 448,114 452,119 456,123 460,126 464,127 468,126 472,123 476,119 480,114 484,109 488,104 492,99 500,94 508,91 516,90 524,91 532,90 540,91 548,92 552,95 556,100 560,106 564,113 568,118 572,123 576,126 580,127 584,125 588,122 592,118 596,113 600,108 604,103 612,97 620,93 628,91 636,90 644,91 652,90 660,91"/><text x="128" y="55" font-size="10" font-family="sans-serif" fill="#a00000" text-anchor="middle">⚠ late</text><line x1="128" y1="57" x2="128" y2="126" stroke="#a00000" stroke-width="0.8" stroke-dasharray="2,2"/><text x="244" y="55" font-size="10" font-family="sans-serif" fill="#a00000" text-anchor="middle">⚠ late</text><line x1="244" y1="57" x2="244" y2="127" stroke="#a00000" stroke-width="0.8" stroke-dasharray="2,2"/><text x="352" y="55" font-size="10" font-family="sans-serif" fill="#a00000" text-anchor="middle">⚠ late</text><line x1="352" y1="57" x2="352" y2="127" stroke="#a00000" stroke-width="0.8" stroke-dasharray="2,2"/><text x="464" y="55" font-size="10" font-family="sans-serif" fill="#a00000" text-anchor="middle">⚠ late</text><line x1="464" y1="57" x2="464" y2="127" stroke="#a00000" stroke-width="0.8" stroke-dasharray="2,2"/><text x="580" y="55" font-size="10" font-family="sans-serif" fill="#a00000" text-anchor="middle">⚠ late</text><line x1="580" y1="57" x2="580" y2="127" stroke="#a00000" stroke-width="0.8" stroke-dasharray="2,2"/><rect x="40" y="40" width="620" height="120" fill="none" stroke="#c08050" stroke-width="1"/><text x="350" y="18" font-size="13" font-family="sans-serif" font-weight="500" text-anchor="middle" fill="#6d3a1a">NST 第三幕（反覆晚期減速 ⚠）</text><text x="40" y="175" font-size="11" font-family="sans-serif" fill="#a06030">0</text><text x="200" y="175" font-size="11" font-family="sans-serif" fill="#a06030">5 min</text><text x="360" y="175" font-size="11" font-family="sans-serif" fill="#a06030">10 min</text><text x="520" y="175" font-size="11" font-family="sans-serif" fill="#a06030">15 min</text><text x="650" y="175" font-size="11" font-family="sans-serif" fill="#a06030">20 min</text><rect x="40" y="185" width="620" height="60" fill="#fff8f0" stroke="#c08050" stroke-width="1"/><line x1="40" y1="215" x2="660" y2="215" stroke="#f0c8a0" stroke-width="0.5"/><text x="34" y="228" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">UA</text><polyline fill="none" stroke="#c04000" stroke-width="1.5" points="40,228 70,228 75,226 80,220 88,210 96,200 104,196 112,200 120,210 128,220 136,226 141,228 190,228 195,226 200,220 208,210 216,200 224,196 232,200 240,210 248,220 256,226 261,228 310,228 315,226 320,220 328,210 336,200 344,196 352,200 360,210 368,220 376,226 381,228 430,228 435,226 440,220 448,210 456,200 464,196 472,200 480,210 488,220 496,226 501,228 550,228 555,226 560,220 568,210 576,200 584,196 592,200 600,210 608,220 616,226 621,228 660,228"/><text x="350" y="255" font-size="11" font-family="sans-serif" text-anchor="middle" fill="#a00000">反覆晚期減速 + 低變異性 — 需立即終止妊娠</text></svg>`;
+
+const PPROM_BASE_PATIENT = {
+  student:  { age:27, gravida:1, para:0, ega:"30+2週", vitals:{ BP:"112/70", HR:"88", RR:"18", SpO2:"98%", Temp:"37.0°C" }, chief:"今晨起床後感覺內褲持續潮濕，走動時有水樣液體流出，無明顯腹痛。", chiefEn:"Continuous wet underwear since morning, watery fluid leaking when walking, no significant abdominal pain.", context:"由丈夫陪同步行入急診，神志清楚，外觀輕度緊張，無陰道出血，液體持續從陰道滲出。初產婦，本次懷孕過程平順，無高血壓、糖尿病等慢性病史。" },
+  resident: { age:32, gravida:2, para:1, ega:"28+5週", vitals:{ BP:"120/78", HR:"92", RR:"18", SpO2:"98%", Temp:"37.2°C" }, chief:"昨夜突然感覺一股水流流出，之後持續有液體漏出，伴隨輕微下腹悶感。", chiefEn:"Sudden gush of fluid last night, continuous leaking since, mild lower abdominal discomfort.", context:"由先生攙扶入院，神志清楚，下腹部輕壓痛，陰道可見清澈液體流出，無出血。前次懷孕足月自然生產，無合併症。近兩週有不規則宮縮。上週有陰道炎病史，已自行停藥。" },
+  attending:{ age:38, gravida:3, para:2, ega:"25+4週", vitals:{ BP:"148/96", HR:"106", RR:"22", SpO2:"96%", Temp:"37.5°C" }, chief:"昨夜突然大量液體流出，今晨因「胎動減少」由先生緊急送醫。", chiefEn:"Large amount of fluid last night, reduced fetal movement today, emergency presentation.", context:"輪椅入診，面色蒼白，右小腿輕度水腫（已存在2週）。陰道大量羊水流出，無明顯出血。胎兒心跳監視器顯示可變減速。IVF 雙胞胎妊娠，38歲高齡。輕度妊娠高血壓服用 Labetalol 200mg BID。子宮頸縫合術（cerclage）三週前置入（子宮頸長度 18mm）。近期COVID-19感染病史（2週前，已康復）。" },
+};
+
+const PPROM_CASES = ["student","resident","attending"].map(diff => {
+  const pt = PPROM_BASE_PATIENT[diff];
+  const isStudent = diff==="student", isResident = diff==="resident", isAttending = diff==="attending";
+  return {
+    id:`pprom_${diff}`, title:"早期破水（PPROM）", titleEn:"Preterm Premature Rupture of Membranes",
+    caseLabel: isStudent?"羊水慢慢流——PPROM早期破水的初步辨別": isResident?"時鐘滴答作響——PPROM期待療法的臨床抉擇":"三個問題同時爆發——複雜型PPROM合併症的決策風暴",
+    caseLabelEn: isStudent?"Watery discharge in preterm patient": isResident?"PPROM expectant management — clinical decision":"Complex PPROM with multiple comorbidities",
+    icon:"ti-droplets", difficulties:[diff],
+    patient: pt,
+    acts:[
+      // ── Act 1 ──
+      { id:"act1", label:"第一幕：評估與確診",
+        intro: isStudent?"28歲護理師婦產科急診，主訴「內褲一直濕濕的」，需要確認這究竟是羊水破水、漏尿，還是白帶增多。"
+          : isResident?"病人有陰道炎病史且近期用藥，液體的性質難以直觀判斷。無菌陰道鏡視診合併商業試驗是關鍵。"
+          :"25週 IVF 雙胞胎 + cerclage + 輕度高血壓 + 右腿水腫，多重干擾因子同時出現，胎心音出現可變減速。必須理出優先順序，同步多線處理。",
+        decisionExam:{
+          id:"act1_decision", icon:"ti-stethoscope", label:"初步診斷決策", labelEn:"Initial Assessment",
+          hint: isStudent?"提示：液體持續流出不可讓病人回家。懷疑破水時，要先做什麼？":"提示：多線同步評估才能理清複雜情況的優先順序。",
+          report: isAttending?{ title:"緊急多線評估啟動", rows:[["BP","148/96 mmHg","⚠️ 偏高（正常<140/90）"],["SpO2","96%","↓ 輕度下降"],["胎心音","可變減速（variable deceleration）","⚠️ 需評估"],["右腿水腫","存在2週","待排除DVT"]] }:null,
+          quiz:{
+            q: isStudent?"持續有水樣液體從陰道流出，30+2週，此時最正確的初步處置是？"
+              : isResident?"28+5週，有陰道炎用藥史，持續液體流出，此時最正確的診斷流程是？"
+              :"25+4週 IVF 雙胞胎，cerclage在位，BP 148/96，胎心音可變減速，最正確的初步處置是？",
+            opts: isStudent?[
+              "立刻安排緊急剖腹產，不需進一步確認",
+              "無菌陰道鏡視診（sterile speculum exam），觀察後穹隆積液，進行 Nitrazine/fern test 或商業檢測（AmniSure）",
+              "請病人回家觀察，明天再來產檢",
+              "直接做數位陰道內診確認破水"
+            ]: isResident?[
+              "陰道炎治療後常有分泌物，開白帶藥讓她回家",
+              "無菌陰道鏡視診 + AmniSure/PAMG-1 商業試驗 + 床邊超音波評估 AFI",
+              "直接做羊膜穿刺注射靛藍胭脂紅染料確認破水",
+              "陰道數位內診確認子宮頸擴張程度後決定處置"
+            ]:[
+              "先處理高血壓，降壓後再評估破水問題",
+              "多線同步：無菌陰道鏡視診確認破水 + 超音波評估雙胎及AFI + 右腿超音波排除DVT + 血壓監控及子癇前症相關檢查",
+              "立即取出 cerclage 以避免感染，再確認破水",
+              "直接準備終止妊娠，25週存活率過低，建議終止"
+            ],
+            cor: 1,
+            wrongExp: isStudent?{
+              0:"⚠️ 破水確診前不應直接終止妊娠，需先完成系統性診斷評估。",
+              2:"⚠️ 液體持續流出不可讓病人離院，必須在急診完成破水確認流程。",
+              3:"⚠️ PPROM 疑似時應避免數位內診（digital exam）以免增加感染風險！應先做無菌陰道鏡視診。"
+            }: isResident?{
+              0:"⚠️ 持續水樣液體流出仍需排除 PPROM，陰道炎用藥史會干擾pH判讀，更需商業快篩（AmniSure）確認。",
+              2:"⚠️ 羊膜穿刺注射染料是侵入性操作，應為最後手段，非第一線確診工具。",
+              3:"⚠️ PPROM 疑似時應避免數位內診以免感染。應先以無菌陰道鏡視診 + 商業試驗確診。"
+            }:{
+              0:"⚠️ 胎兒窘迫（可變減速）與破水確診才是最緊迫問題，不應先處理血壓而延誤胎兒評估。",
+              2:"⚠️ 應先完成系統性評估再決定 cerclage 是否取出，不應在未確診前貿然移除。",
+              3:"⚠️ 應先評估、充分告知、與家屬討論後再決定。25週仍有期待療法的可能性，不應直接放棄。"
+            },
+            exp: isStudent?"PPROM 確診需綜合三步驟：①後穹隆液體積聚（pooling）②pH 鹼性（Nitrazine 試紙藍色）③商業快篩（AmniSure/PAMG-1）。應避免數位陰道內診以免增加感染風險。超音波 AFI 為輔助依據但非確診必要條件。"
+              : isResident?"PPROM 確診流程：無菌陰道鏡視診觀察積液 + AmniSure 商業快篩（敏感度>95%）+ 床邊超音波評估 AFI。陰道炎用藥史會影響 pH 判讀，更需倚賴商業快篩。避免數位內診。"
+              :"複雜高風險個案需多線同步處置：①確認破水診斷 ②評估雙胎狀況（各自AFI）③排除DVT（右腿水腫）④監控血壓及子癇前症。危機分流（triage）優先於任何單一處置。"
+          }
+        },
+        exams:[
+          { id:"speculum", icon:"ti-search", label:"無菌陰道鏡視診 + 快篩", labelEn:"Sterile Speculum + AmniSure",
+            hint:"提示：pH 試紙、ferning、商業快篩各有意義，加總判讀。",
+            report:{ title:"無菌陰道鏡視診結果", rows:[
+              ["後穹隆積液","清澈液體積聚（pooling）","✅ 陽性"],
+              ["Nitrazine pH 試紙","鹼性（藍色，pH≈7.2）","✅ 鹼性（正常陰道 pH 3.8–4.2）"],
+              ["Fern test","玻片乾燥後見羊齒狀結晶","✅ 陽性"],
+              ["AmniSure（PAMG-1）","陽性","✅ 確診"],
+            ]},
+            quiz:{ q:"根據以上結果，下列何者是 PPROM 診斷最重要的確立依據組合？",
+              opts:["pH 試紙呈酸性 + 無液體積聚","後穹隆液體積聚 + pH 鹼性 + ferning + 商業快篩陽性","單憑超音波 AFI 降低即可確診","NST 有變異就可排除 PPROM"],
+              cor:1, exp:"PPROM 診斷需綜合：液體積聚 + pH 鹼性（羊水 pH 7.0–7.5 vs 正常陰道 pH 3.8–4.2）+ ferning + 商業試驗（IGFBP-1 或 PAMG-1）。超音波羊水過少為支持證據但非確診必要條件。" } },
+          { id:"us_nst1", icon:"ti-wave-sine", label:"超音波 + NST", labelEn:"Ultrasound + NST",
+            hint:"提示：AFI 與潛伏期、感染風險有關。",
+            ctgSvg: (isStudent ? CTG_REACTIVE : CTG_VARIABLE_DECEL), rows:[
+              ["AFI",isStudent?"4.2 cm":isResident?"3.6 cm":"2.8 cm（雙胎A）","↓ 羊水過少（正常 AFI >5 cm）"],
+              ["胎位","頭先露","正常"],
+              ["胎心音基準",isStudent?"148 bpm":isResident?"142 bpm":"胎心音可變減速","NST 中度變異"],
+              ["NST 結果",isStudent?"Reactive，無減速":isResident?"偶發可變減速（variable decel）":"可變減速，需持續監測",""],
+              isAttending?["雙胎B","AFI 正常，羊膜囊完整","獨立評估"]:[],
+            ].filter(r=>r.length>0)},
+            quiz:{ q: isStudent||isResident?"PPROM 確診且 AFI 過低，下列哪個描述對殘存羊水量與預後的關係最正確？":"NST 可變減速合併 AFI 過低（2.8 cm），對臨床決策的意義為何？",
+              opts: isStudent||isResident?[
+                "AFI < 5cm 代表已完全無羊水，胎兒必然死亡",
+                "殘存羊水過少與較短的潛伏期和較高的絨毛膜羊膜炎風險相關",
+                "AFI 只影響胎兒肺發育，對潛伏期沒有影響",
+                "AFI < 5 應立即分娩，不可期待療法"
+              ]:[
+                "可變減速代表胎兒立即危機，必須馬上剖腹產",
+                "可變減速可能因臍帶受壓（羊水過少）所致，需持續監測並評估期待療法可行性",
+                "可變減速與羊水量無關，繼續觀察即可",
+                "只要NST有基本心跳，就不需要特別處置"
+              ],
+              cor:1, exp: isStudent||isResident?"嚴重羊水過少（AFI<5cm 或 MVP<2cm）不是期待療法的絕對禁忌。研究顯示殘存羊水量與潛伏期成正比：羊水越少，潛伏期越短，且臨床性絨毛膜羊膜炎風險增加約兩倍。但只要無感染、無胎兒窘迫，仍可考慮期待療法。":"可變減速（variable deceleration）在 PPROM + 羊水過少情境下，常因臍帶受壓所致（非必然胎兒酸中毒）。但需持續監測——若演變為晚期減速或基準變異消失，則代表胎兒窘迫，需立即終止妊娠。" } },
+        ]
+      },
+      // ── Act 2 ──
+      { id:"act2", label:"第二幕：確診後的處置套餐",
+        intro: isStudent?"PPROM 確診，30+2 週，無宮縮，無感染徵象，胎兒狀況目前穩定。需要決定處置方案。"
+          : isResident?"確診後需同步展開多項處置：類固醇、抗生素、硫酸鎂（神經保護）、安胎藥物。28週屬於「極早期早產」，硫酸鎂使用是本幕核心考點。"
+          :"入院第2天，體溫上升，家屬強烈要求「不計代價安胎到34週」。同時血壓持續偏高，子癇前症徵象加重。需在醫療現實、家屬期望、倫理責任間做出決定。",
+        decisionExam:{
+          id:"act2_decision", icon:"ti-pill", label:"期待療法決策", labelEn:"Management Decision",
+          hint: isStudent?"提示：<34週 PPROM 期待療法的標準套餐是什麼？":"提示：知情同意 + 個別化決策 + 設定明確的分娩觸發條件。",
+          report: isAttending?{ title:"入院第2天評估", rows:[
+            ["BP","152/102 mmHg","⚠️ ↑ 偏高"],
+            ["體溫","38.0°C","⚠️ ↑ 發燒趨勢"],
+            ["WBC","14,800/μL","⚠️ ↑（正常 4,000–10,000/μL）"],
+            ["sFlt-1/PlGF ratio","88","⚠️ >38 提示子癇前症高風險"],
+            ["24hr 尿蛋白","680 mg","⚠️ 蛋白尿（正常 <300 mg/24hr）"],
+          ]}:null,
+          quiz:{
+            q: isStudent?"30週 PPROM 確診，無感染徵象，胎兒穩定，最正確的處置方向是？"
+              : isResident?"28+5週 PPROM 確診，AFI 過少，最完整的標準處置套餐是？"
+              :"PPROM + 子癇前症（sFlt-1/PlGF 88 + 蛋白尿 + 頭痛），家屬要求不計代價安胎，最正確的應對是？",
+            opts: isStudent?[
+              "立刻催生，30週嬰兒在NICU可以存活，不必等待",
+              "期待療法：住院 + 抗生素延長潛伏期 + 類固醇促肺成熟 + 監測感染徵象",
+              "只給抗生素，類固醇不必要因會增加感染",
+              "讓病人回家，囑咐每天量體溫即可"
+            ]: isResident?[
+              "只給類固醇就好，28週太小其他藥物暫緩",
+              "Betamethasone 12mg IM ×2劑（間隔24h）+ 抗生素7天 + MgSO4 IV（神經保護，<32週）",
+              "Ritodrine 安胎藥持續靜脈注射至 34週，不需類固醇",
+              "Indomethacin 安胎連續使用到34週"
+            ]:[
+              "配合家屬要求，全力安胎並繼續期待療法，不告知風險以避免家屬焦慮",
+              "完整告知風險（感染、子癇前症惡化、母體敗血症），在知情同意下共同決策：設定停止條件 + 啟動 MgSO4 神經保護",
+              "直接宣告「25週必須終止妊娠」，強制執行",
+              "多種安胎藥合用最大化延長妊娠：MgSO4+Nifedipine+Indomethacin 同時給"
+            ],
+            cor:1,
+            wrongExp: isStudent?{
+              0:"⚠️ 期待療法可顯著減少早產兒併發症。30週若無緊急適應症，不應直接終止妊娠。",
+              2:"⚠️ <34週強烈建議給予類固醇（Betamethasone）促肺成熟，可降低新生兒 RDS 風險約 40–60%。",
+              3:"⚠️ PPROM 需住院監測，門診管理風險過高，不適合讓病人回家。"
+            }: isResident?{
+              0:"⚠️ 28週 PPROM 需同時類固醇+抗生素+MgSO4（<32週神經保護），三管齊下才是完整處置。",
+              2:"⚠️ Ritodrine 副作用大現已少用；安胎藥物在 PPROM 中最多使用48小時（讓類固醇發揮效果），不應長期使用。",
+              3:"⚠️ >32週有動脈導管早期關閉風險，Indomethacin 不應長期使用，更不可用至34週。"
+            }:{
+              0:"⚠️ 隱瞞風險違反知情同意原則（Informed Consent）。家屬有權利了解真實的風險，才能做出真正自主的決定。",
+              2:"⚠️ 非立即危及生命不可強制執行未告知的處置。應先完整說明，讓家屬在理解下共同決策。",
+              3:"⚠️ 多藥合用風險增加，且感染徵象已出現繼續安胎危險。應設定明確的分娩觸發條件，而非無限制使用安胎藥。"
+            },
+            exp: isStudent?"<34週 PPROM 標準期待療法：①類固醇促肺成熟（Betamethasone 12mg IM ×2劑，間隔24h）②抗生素7天延長潛伏期（Ampicillin+Erythromycin 方案）③<32週給 MgSO4 神經保護 ④住院密切監測感染徵象。"
+              : isResident?"28週 PPROM 完整處置套餐：①Betamethasone 促肺成熟（降低 RDS 40–60%、IVH 30–40%）②抗生素7天（ORACLE 方案：IV Ampicillin + Erythromycin 48小時→口服5天）③MgSO4 神經保護（<32週，Loading 4–6g + Maintenance 1–2g/hr）④監測鎂中毒三徵：呼吸>12次/分、尿量>30mL/hr、膝反射存在。"
+              :"Periviable PPROM 決策框架：①真實告知存活率（25週約55–65%）及神經障礙風險（20–30%）②在知情同意下共同決策 ③設定明確的「立刻分娩」觸發條件（BP≥160/110、頭痛視力模糊、PLT<100K、感染惡化、胎兒窘迫）④啟動 MgSO4 神經保護 ⑤由 MFM + NICU 多科共同管理。"
+          }
+        },
+        exams:[
+          { id:"abx", icon:"ti-test-pipe", label:"抗生素方案 + 血液報告", labelEn:"Antibiotics + Labs",
+            hint: isStudent?"提示：ORACLE trial 確立的標準方案是什麼？注意哪一種抗生素被明確禁止？":"",
+            report:{ title:"血液報告 + 抗生素給藥", rows:[
+              ["WBC",isStudent?"9,800/μL":isResident?"11,200/μL":"14,800/μL",isStudent?"正常（4,000–10,000/μL）":isResident?"輕度↑（正常 4,000–10,000/μL）":"⚠️ ↑↑（正常 4,000–10,000/μL）"],
+              ["CRP",isStudent?"0.8 mg/L":isResident?"12 mg/L":"28 mg/L",isStudent?"正常（<5 mg/L）":isResident?"↑（正常 <5 mg/L）":"⚠️ ↑↑（正常 <5 mg/L）"],
+              ["GBS 培養",isStudent?"已送檢，結果待回":"陰性 ✓",""],
+              ["Betamethasone","第一劑已給予","妊娠<34週促肺成熟"],
+              isResident||isAttending?["MgSO4","Loading 4g IV / Maintenance 1–2g/hr","<32週神經保護"]:null,
+            ].filter(Boolean)},
+            quiz:{ q:"針對 PPROM，下列抗生素方案何者最符合目前指引（ORACLE/ACOG）？",
+              opts:[
+                "Amoxicillin-clavulanate 口服 7天",
+                "IV Ampicillin 2g Q6H + Erythromycin 250mg Q6H 共48小時，再改口服 Amoxicillin 250mg Q8H + Erythromycin 333mg Q8H 共5天",
+                "單獨 Penicillin G IV 連用7天",
+                "不需給抗生素，等有感染徵象再說"
+              ],
+              cor:1, exp:"ORACLE trial 確立的標準方案：IV Ampicillin + Erythromycin 48小時後接口服5天，共7天。特別注意：Amoxicillin-clavulanate（Augmentin）因與新生兒壞死性腸炎（NEC）風險相關，ACOG 明確不建議使用。即使 GBS 陰性仍需完整7天療程。" } },
+          isResident?{ id:"mgso4", icon:"ti-activity", label:"MgSO4 神經保護方案", labelEn:"MgSO4 Neuroprotection",
+            hint:"提示：MgSO4 在此的適應症與子癇前症中的用途不同。",
+            report:{ title:"MgSO4 給藥方案", rows:[
+              ["給藥指徵","<32週（ACOG）即將分娩前","神經保護，非安胎、非降壓"],
+              ["Loading dose","MgSO4 4–6g IV over 20–30 min",""],
+              ["Maintenance","1–2 g/hr IV持續輸注",""],
+              ["毒性監測①","呼吸速率 >12 次/分","需每小時監測"],
+              ["毒性監測②","尿量 >30 mL/hr","需每小時監測"],
+              ["毒性監測③","膝反射（DTR）存在","消失=早期毒性警訊"],
+              ["解毒劑","Calcium Gluconate 10% 1g IV","床旁備用"],
+            ]},
+            quiz:{ q:"硫酸鎂（MgSO4）在 PPROM 中的神經保護適應症，下列何者最正確？",
+              opts:[
+                "所有 PPROM 無論週數均需給予 MgSO4",
+                "ACOG 建議 <32週（RCOG 建議 <30週）即將分娩前給予 MgSO4 以降低腦性麻痺風險",
+                "MgSO4 主要用於預防母體子癲，非神經保護",
+                "MgSO4 神經保護需連續給予整個住院過程"
+              ],
+              cor:1, exp:"MgSO4 胎兒神經保護：ACOG 建議 <32週、預計7天內即將分娩時給予。RCOG 界值為 <30週。給藥時機是在「即將分娩前」而非整個住院期間。若停藥超過6小時後再次出現分娩徵象，應重新給予 Loading dose。毒性監測三要素：呼吸、尿量、膝反射。" } }
+          : isAttending?{ id:"cerclage_ethics", icon:"ti-scale", label:"Cerclage 決策 + 倫理諮詢", labelEn:"Cerclage & Ethics",
+            hint:"",
+            report:{ title:"Cerclage 評估 + 子癇前症更新", rows:[
+              ["Cerclage","縫合線完整，無感染徵象","目前 CRP 28 mg/L 輕度↑"],
+              ["sFlt-1/PlGF ratio","88","⚠️ >38 提示高風險"],
+              ["24hr 尿蛋白","680 mg","⚠️ 蛋白尿（正常 <300 mg/24hr）"],
+              ["NICU評估","25+4週存活率約 55–65%","嚴重神經障礙風險 20–30%"],
+            ]},
+            quiz:{ q:"25週 PPROM 合併 cerclage 在位，目前無感染徵象，對 cerclage 的處置何者最符合現行實證？",
+              opts:[
+                "立刻取出 cerclage，破水後 cerclage 都必須移除以防感染",
+                "現有文獻顯示保留 cerclage 可能延長潛伏期，但同時增加感染風險，應個別化評估後與家屬充分討論後決定",
+                "Cerclage 可保留直到出現宮縮時再取出",
+                "保留 cerclage 可以防止 PPROM 惡化，是標準處置"
+              ],
+              cor:1, exp:"PPROM 合併 cerclage 是目前爭議性最大的臨床情境。保留 cerclage 可能延長潛伏期約6–10天，但顯著增加絨毛膜羊膜炎風險（OR 2–4倍）。目前無足夠 Level I 證據，ACOG 建議個別化決策。25週以下延長潛伏期的邊際效益巨大，需充分告知家屬真實存活率與神經障礙風險，在知情同意下共同決策。" } }
+          : null,
+        ].filter(Boolean)
+      },
+      // ── Act 3 ──
+      { id:"act3", label:"第三幕：感染危機與分娩決策",
+        intro: isStudent?"入院第5天，病人子宮輕微壓痛，惡臭分泌物，心跳加快，體溫升高。需判斷是否有絨毛膜羊膜炎並決定是否終止妊娠。"
+          : isResident?"入院第8天，護理師因胎心音監視器警報呼叫你。病人說「肚子有點緊緊的」，體溫升高，WBC 上升。NST 出現令人擔憂的圖形。"
+          :"入院第4天清晨4點，護理師同時呼叫：(1) BP 168/110 mmHg (2) 體溫 38.8°C (3) 胎心音晚期減速。你必須在5分鐘內做出決策。",
+        decisionExam:{
+          id:"act3_decision", icon:"ti-alert-triangle", label:"感染 + 分娩決策", labelEn:"Infection & Delivery Decision",
+          hint:isAttending?"":"提示：感染是安胎絕對禁忌症。臨床性絨毛膜羊膜炎不需等培養報告確認。",
+          report:{ title: isAttending?"緊急生命徵象（入院第4天清晨4點）":"生命徵象更新", rows:[
+            ["BP",isStudent?"118/76":isResident?"122/80":"168/110","⚠️ ".repeat(isAttending?1:0)+(isAttending?"重度高血壓（≥160/110 mmHg）":"")],
+            ["HR",isStudent?"104 bpm":isResident?"108 bpm":"124 bpm","⚠️ ↑ 心跳過速"],
+            ["Temp",isStudent?"38.1°C":isResident?"38.3°C":"38.8°C","⚠️ ↑ 發燒"],
+            isAttending?["SpO2","95%","↓（正常 ≥97%）"]:null,
+          ].filter(Boolean)},
+          quiz:{
+            q: isStudent?"體溫 38.1°C，子宮壓痛，惡臭分泌物，心跳 104 bpm，此時最正確的處置是？"
+              : isResident?"NST 出現晚期減速，體溫 38.3°C，WBC 19,400，此時最正確的處置是？"
+              :"BP 168/110，體溫 38.8°C，胎心音晚期減速，此時應同步啟動哪些緊急處置？",
+            opts: isStudent?[
+              "體溫只有38.1°C，繼續觀察等體溫超過39°C再說",
+              "診斷臨床性絨毛膜羊膜炎，立即廣效抗生素 + 準備分娩（無論週數）",
+              "加強安胎藥物，繼續期待療法",
+              "只給退燒藥（Acetaminophen），暫時控制體溫"
+            ]: isResident?[
+              "調整胎心音監視器位置重新判讀，先觀察30分鐘再說",
+              "診斷臨床性絨毛膜羊膜炎合併胎兒窘迫，廣效抗生素 + 立即準備剖腹產",
+              "給 Tocolytic 安胎，壓制宮縮，再觀察24小時",
+              "轉換為左側臥位給氧，靜脈補水，繼續觀察"
+            ]:[
+              "先讓病人左側臥+面罩給氧，等血壓藥效發揮後再評估 NST（等30分鐘）",
+              "同步啟動：Labetalol IV 緊急降壓 + MgSO4 loading（子癇預防）+ 廣效抗生素 + 叫麻醉、通知 NICU、準備緊急剖腹產",
+              "先取出 cerclage，再評估是否需要手術",
+              "等待血液培養報告確認是否為真性敗血症再決定手術"
+            ],
+            cor:1,
+            wrongExp: isStudent?{
+              0:"⚠️ 已符合臨床性絨毛膜羊膜炎診斷基準：發燒（>38°C）+ 子宮壓痛 + 惡臭分泌物 + 心跳過速。等待體溫更高只會延誤處置。",
+              2:"⚠️ 絨毛膜羊膜炎是安胎絕對禁忌症！繼續安胎只會讓感染惡化，危及母嬰生命。",
+              3:"⚠️ 退燒藥只是治標，無法處理根本的感染問題。感染確診後需廣效抗生素 + 立即分娩。"
+            }: isResident?{
+              0:"⚠️ 晚期減速合併感染徵象是產科急症，不可再等待。每延誤一分鐘都增加母嬰風險。",
+              2:"⚠️ 感染合併胎兒窘迫是安胎絕對禁忌症。繼續安胎不但無效，更會造成危害。",
+              3:"⚠️ 左側臥位和補液只能短暫改善，無法取代立即分娩的決定。感染+胎兒窘迫需立即終止妊娠。"
+            }:{
+              0:"⚠️ 重度高血壓+感染+胎兒窘迫三重危機同時出現，30分鐘延遲在產科急症中是不可接受的。必須分秒必爭多線同步啟動。",
+              2:"⚠️ 緊急情況下 cerclage 可在術中同步處理，不應為了先取出 cerclage 而延誤手術。",
+              3:"⚠️ 臨床診斷已足夠，等培養報告會延誤數小時。感染性休克的黃金時間是1小時內給予廣效抗生素。"
+            },
+            exp: isStudent?"臨床性絨毛膜羊膜炎診斷標準（只需符合以下多項）：發燒（>38°C）+ 子宮底部壓痛 + 惡臭分泌物 + 母體心跳過速（>100 bpm）+ 胎兒心跳過速（>160 bpm）。確診後需立刻：①廣效抗生素（Ampicillin + Gentamicin ± Clindamycin）②無論週數立即準備分娩③分娩後持續給抗生素至退燒24小時無症狀。感染是安胎絕對禁忌症。"
+              : isResident?"感染（臨床性絨毛膜羊膜炎）+ 胎兒窘迫（晚期減速+變異性消失）= 立即終止妊娠。不需等培養報告確認。分娩方式不一律剖腹：頭先露+子宮頸已擴張+短時間可完成陰道分娩者，陰道產並非禁忌，依產科條件綜合判斷。現代28週以上早產兒存活率達80%以上。"
+              :"三重危機同步處置原則（分秒必爭）：①重度高血壓——Labetalol IV 20mg 緊急降壓，目標 <160/110 ②子癇預防——MgSO4 4–6g Loading ③感染——廣效抗生素立即給予 ④胎兒窘迫——通知麻醉科、NICU，啟動緊急手術流程。Cerclage 可術中同步處理。不等培養報告，臨床診斷即可行動。"
+          }
+        },
+        exams:[
+          { id:"chorioamnionitis", icon:"ti-test-pipe", label:"感染指標 + NST", labelEn:"Infection Markers + NST",
+            hint:isStudent?"提示：WBC、CRP 趨勢比單一數值更重要。":"",
+            ctgSvg: CTG_LATE_DECEL,
+            report:{ title:"緊急檢查報告", rows:[
+              ["WBC",isStudent?"17,800/μL ↑↑（核左移 band 18%）":isResident?"19,400/μL ↑↑":"19,400/μL ↑↑","⚠️ 感染指標（正常 4,000–10,000/μL）"],
+              ["CRP",isStudent?"48 mg/L":isResident?"82 mg/L":"82 mg/L","⚠️ ↑↑（正常 <5 mg/L）"],
+              isResident?["乳酸","2.8 mmol/L ↑","⚠️（正常 <2.0 mmol/L）"]:null,
+              ["NST","胎心率 168–172 bpm（過速），晚期減速，變異性 <5 bpm","⚠️ 胎兒窘迫"],
+              ["子宮觸診","明顯子宮底部壓痛，陰道分泌物有異味","⚠️ 絨毛膜羊膜炎"],
+            ].filter(Boolean)},
+            quiz:{ q: isStudent?"臨床性絨毛膜羊膜炎確診後，分娩後抗生素應持續給予多久？"
+              : isResident?"29週 + 絨毛膜羊膜炎 + 胎兒窘迫，最終分娩方式的選擇應依據？"
+              :"雙胞胎第一胎因 PPROM 合併症需終止，第二胎羊膜囊完整，對於第二胎的後續處置，何者最符合現行指引？",
+              opts: isStudent?[
+                "確認無發燒後立刻停止",
+                "分娩後不需再給抗生素",
+                "分娩後持續給予抗生素至少到產後24小時或退燒無症狀",
+                "至少持續給抗生素2週"
+              ]: isResident?[
+                "一律剖腹產，早產兒無法承受陰道分娩",
+                "根據產科條件綜合判斷（子宮頸成熟度、胎位、估計分娩時間），若短時間可完成陰道分娩且胎兒狀況允許，陰道分娩並非禁忌",
+                "早產兒一定要自然產才能刺激肺部發育",
+                "感染時一律陰道分娩以避免剖腹傷口感染"
+              ]:[
+                "第一胎剖腹後必須立即娩出第二胎",
+                "若第二胎狀況穩定（NST 正常、無感染），可考慮期待管理（asynchronous delivery），但需高度個別化且需MFM諮詢",
+                "雙胞胎第一胎出生後，第二胎必須在30分鐘內分娩",
+                "第二胎應繼續期待至40週足月後分娩"
+              ],
+              cor: isStudent?2: isResident?1:1,
+              exp: isStudent?"陰道分娩後多數指引建議至少追加一劑抗生素（或到退燒後24小時無症狀）。剖腹產則需繼續至臨床改善（無發燒24小時）。一般不需延長至2週，應根據臨床反應調整。抗生素選擇：Ampicillin + Gentamicin（+ Clindamycin 剖腹產）。"
+                : isResident?"早產兒分娩方式非一律剖腹。關鍵因素：胎位（頭先露可考慮陰道產）、子宮頸擴張程度、估計分娩時間與胎兒窘迫嚴重性。感染本身非剖腹絕對適應症，但若短時間無法陰道分娩且胎兒狀況持續惡化，則需立即剖腹。現代28週以上早產兒存活率達80%以上。"
+                :"Asynchronous delivery（非同步分娩）：雙胞胎第一胎分娩後，若第二胎羊膜囊完整、無感染、NST 正常、宮縮可控，可考慮延遲分娩以爭取胎齡（尤其<28週）。需嚴密監測（每日感染指標、NST），一旦出現絨毛膜羊膜炎、胎兒窘迫或重度子癇前症，應立即終止。強烈建議由 MFM 主導。" } },
+        ]
+      }
+    ]
+  };
+});
+
+const CTG_VARIABLE_DECEL = `<svg width="100%" viewBox="0 0 680 260" role="img" xmlns="http://www.w3.org/2000/svg"><rect width="680" height="260" fill="#fff8f0"/><g stroke="#f0c8a0" stroke-width="0.5"><line x1="40" y1="50" x2="660" y2="50"/><line x1="40" y1="70" x2="660" y2="70"/><line x1="40" y1="90" x2="660" y2="90"/><line x1="40" y1="110" x2="660" y2="110"/><line x1="40" y1="130" x2="660" y2="130"/><line x1="40" y1="150" x2="660" y2="150"/><line x1="40" y1="40" x2="40" y2="160"/><line x1="120" y1="40" x2="120" y2="160"/><line x1="200" y1="40" x2="200" y2="160"/><line x1="280" y1="40" x2="280" y2="160"/><line x1="360" y1="40" x2="360" y2="160"/><line x1="440" y1="40" x2="440" y2="160"/><line x1="520" y1="40" x2="520" y2="160"/><line x1="600" y1="40" x2="600" y2="160"/><line x1="660" y1="40" x2="660" y2="160"/></g><text x="34" y="53" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">160</text><text x="34" y="93" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">140</text><text x="34" y="133" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">120</text><line x1="40" y1="90" x2="660" y2="90" stroke="#e09050" stroke-width="0.8" stroke-dasharray="4,3"/><polyline fill="none" stroke="#c04000" stroke-width="1.5" stroke-linejoin="round" points="40,91 44,89 48,87 52,91 56,93 60,88 64,86 68,90 72,93 76,89 80,87 84,91 88,94 92,89 96,86 100,91 104,93 108,88 112,86 116,90 120,93 124,89 126,95 128,105 130,118 132,128 134,137 136,143 138,148 140,151 142,152 144,151 146,148 148,143 150,136 152,127 154,117 156,107 158,98 160,93 162,90 164,88 168,91 172,94 176,89 180,86 184,90 188,93 192,88 196,85 200,90 204,93 208,88 212,86 216,90 220,94 224,89 228,86 230,94 232,106 234,120 236,131 238,140 240,146 242,150 244,152 246,151 248,147 250,142 252,134 254,124 256,114 258,104 260,96 262,91 264,88 268,91 272,94 276,89 280,86 284,90 288,93 292,88 296,85 300,90 304,93 308,88 312,86 316,90 320,94 324,89 328,86 330,93 332,104 334,117 336,128 338,138 340,145 342,150 344,152 346,150 348,146 350,140 352,132 354,122 356,112 358,102 360,95 362,90 364,88 368,91 372,94 376,89 380,86 384,90 388,93 392,88 396,85 400,90 404,93 408,88 412,86 416,90 420,94 424,89 428,86 432,90 436,93 440,88 444,86 448,90 452,93 456,88 460,86 464,90 468,93 472,88 476,85 480,90 484,93 488,88 492,86 496,90 500,93 504,88 508,86 512,90 516,93 520,88 524,86 528,90 532,93 536,88 540,86 544,90 548,93 552,88 556,86 560,90 564,93 568,88 572,86 576,90 580,93 584,88 588,86 592,90 596,93 600,88 604,86 608,90 612,93 616,88 620,86 624,90 628,93 632,88 636,86 640,90 644,93 648,88 652,86 656,90 660,92"/><text x="142" y="57" font-size="10" font-family="sans-serif" fill="#854F0B" text-anchor="middle">⚡ var</text><line x1="142" y1="59" x2="142" y2="152" stroke="#854F0B" stroke-width="0.8" stroke-dasharray="2,2"/><text x="244" y="57" font-size="10" font-family="sans-serif" fill="#854F0B" text-anchor="middle">⚡ var</text><line x1="244" y1="59" x2="244" y2="152" stroke="#854F0B" stroke-width="0.8" stroke-dasharray="2,2"/><text x="344" y="57" font-size="10" font-family="sans-serif" fill="#854F0B" text-anchor="middle">⚡ var</text><line x1="344" y1="59" x2="344" y2="152" stroke="#854F0B" stroke-width="0.8" stroke-dasharray="2,2"/><rect x="40" y="40" width="620" height="120" fill="none" stroke="#c08050" stroke-width="1"/><text x="350" y="18" font-size="13" font-family="sans-serif" font-weight="500" text-anchor="middle" fill="#6d3a1a">NST — 偶發可變減速（Variable Deceleration）</text><text x="40" y="175" font-size="11" font-family="sans-serif" fill="#a06030">0</text><text x="200" y="175" font-size="11" font-family="sans-serif" fill="#a06030">5 min</text><text x="360" y="175" font-size="11" font-family="sans-serif" fill="#a06030">10 min</text><text x="520" y="175" font-size="11" font-family="sans-serif" fill="#a06030">15 min</text><text x="650" y="175" font-size="11" font-family="sans-serif" fill="#a06030">20 min</text><rect x="40" y="185" width="620" height="60" fill="#fff8f0" stroke="#c08050" stroke-width="1"/><line x1="40" y1="215" x2="660" y2="215" stroke="#f0c8a0" stroke-width="0.5"/><line x1="40" y1="230" x2="660" y2="230" stroke="#f0c8a0" stroke-width="0.5"/><text x="34" y="228" font-size="11" font-family="sans-serif" text-anchor="end" fill="#a06030">UA</text><polyline fill="none" stroke="#c04000" stroke-width="1.5" points="40,228 100,228 103,227 106,224 110,220 114,217 118,216 122,217 126,220 130,224 133,227 136,228 220,228 223,227 226,224 230,220 234,217 238,216 242,217 246,220 250,224 253,227 256,228 320,228 323,227 326,224 330,220 334,217 338,216 342,217 346,220 350,224 353,227 356,228 660,228"/><text x="350" y="255" font-size="11" font-family="sans-serif" text-anchor="middle" fill="#854F0B">偶發可變減速（臍帶受壓）— 基準線中度變異，無晚期減速</text></svg>`;
+
+
+  { id:"placenta_previa", title:"前置胎盤", titleEn:"Placenta Previa",
+    caseLabel:"第三孕期陰道大量出血", caseLabelEn:"3rd Trimester Vaginal Bleeding",
+    icon:"ti-droplet", difficulties:["student","resident","attending"],
+    patient:{ age:29, gravida:2, para:1, ega:"34+2週",
+      vitals:{ BP:"118/74", HR:"102", RR:"18", SpO2:"98%", Temp:"36.8°C" },
+      chief:"陰道大量出血，無腹痛，約一片衛生棉。無宮縮感。",
+      chiefEn:"Heavy painless vaginal bleeding, ~1 pad soaked. No contractions." },
+    acts:[{
+      id:"act1", label:"第一幕：初步評估",
+      exams:[
+        { id:"cbc", icon:"ti-test-pipe", label:"抽血 CBC/血型", labelEn:"CBC / Blood Type",
+          hint:"貧血程度反映失血量，記得確認血型以利備血。",
+          report:{ title:"血液報告", rows:[["Hb","9.2 g/dL","↓ 偏低（正常 11.0–14.0）"],["Hct","27%","↓ 偏低（正常 33–42%）"],["PLT","198k","正常（150–400k）"],["WBC","11.2k","略高（正常 4.0–10.5k，妊娠可偏高）"],["Blood type","A+","備血中"]] },
+          quiz:{ q:"Hb 9.2 g/dL，在此情境下，你的第一步處置是？",
+            opts:["建立兩條大靜脈留置針，備O型未配對血，同時送血型交叉配對","立即輸注2單位紅血球，等配對結果再說","Hb 9.2 尚在可接受範圍，先觀察即可","補充口服鐵劑，暫緩輸血"],
+            cor:0, exp:"前置胎盤隨時可能大出血惡化。先開兩條粗針靜脈通路，備血（O型），送交叉配對。單純補口服鐵劑或等待均不適當。" } },
+        { id:"us", icon:"ti-wave-sine", label:"超音波", labelEn:"Ultrasound",
+          hint:"第三孕期無痛出血，超音波最重要的是確認胎盤位置。",
+          report:{ title:"超音波報告", rows:[["胎位","頭位","正常"],["EFW","2050g（28th %ile）",""],["AFI","14.2 cm","正常"],["胎盤位置","完全前置（完全覆蓋子宮頸內口）","⚠️ 異常"],["子宮頸長","3.1 cm","尚可"]] },
+          quiz:{ q:"超音波確認完全前置胎盤，孕34+2週且出血中，最適當處置方向是？",
+            opts:["住院觀察，給Betamethasone，若出血穩定可等至34週後再剖腹","立即進行緊急剖腹生產","告知出院回家觀察，一週後門診追蹤","嘗試內診評估子宮頸以決定是否引產"],
+            cor:0, exp:"完全前置胎盤禁止內診。34+2週出血中，需住院、給類固醇促肺成熟、密切監控。若出血持續或大量則緊急剖腹。" } },
+        { id:"nst", icon:"ti-activity", label:"胎心音 NST", labelEn:"NST / EFM",
+          hint:"評估胎兒目前氧合狀態，判斷是否有急性胎兒窘迫。",
+          ctgSvg: CTG_REACTIVE,
+          report:{ title:"NST 報告", rows:[["基礎心率","148 bpm","正常"],["變異性","中度 (6-25 bpm)","正常"],["加速","2次/20分，各>15秒","Reactive"],["減速","無","正常"],["宮縮","無規律宮縮","無早產徵象"]] },
+          quiz:{ q:"NST Reactive，對此病人的處置方針有無改變？",
+            opts:["胎兒目前氧合良好；但出血病因風險不因NST正常而降低，仍需住院觀察","NST Reactive代表可以安全讓病人回家，下週再追蹤","NST Reactive就不需要給Betamethasone了","NST Reactive表示胎盤位置判讀可能有誤，需複查超音波"],
+            cor:0, exp:"NST Reactive確認胎兒短期狀態良好，但這不改變住院觀察原則。類固醇仍應給予。" } },
+        { id:"ts", icon:"ti-droplet-half", label:"血型交叉配對 T&S", labelEn:"Type & Screen",
+          hint:"無痛出血有備血必要，確認有無不規則抗體。",
+          report:{ title:"血型配對報告", rows:[["ABO/Rh","A Positive",""],["抗體篩檢","陰性","正常"],["備血","2單位 pRBC 已備","完成"],["FFP","視需要追加",""]] },
+          quiz:{ q:"備血完成後，此病人最重要的衛教是？",
+            opts:["嚴禁性行為與內診，若出血增加立即返院急診","可以正常活動，但避免劇烈運動","需每日來院監測，門診追蹤即可","宮縮出現時才需要再來急診"],
+            cor:0, exp:"完全前置胎盤：絕對臥床、禁內診、禁性行為。出血增加、宮縮、胎動減少任一症狀即為緊急狀況。" } },
+      ]
+    }]
+  },
+  {
+    id:"preeclampsia", title:"重度子癇前症", titleEn:"Preeclampsia with Severe Features",
+    caseLabel:"致命的高血壓——重度子癇前症的臨床抉擇", caseLabelEn:"Hypertensive Emergency in Pregnancy",
+    icon:"ti-heart-rate-monitor", difficulties:["resident","attending"],
+    patient:{ age:28, gravida:2, para:1, ega:"33+2週",
+      vitals:{ BP:"174/112", HR:"96", RR:"18", SpO2:"97%", Temp:"36.9°C", FHR:"148 bpm" },
+      chief:"持續性劇烈頭痛（服用 acetaminophen 無效）合併右上腹悶痛，持續約 3 小時。視野出現閃光感（photopsia），本週體重增加 3 公斤。",
+      chiefEn:"Severe persistent headache unresponsive to acetaminophen, RUQ pain ×3hr, photopsia, 3kg weight gain this week.",
+      context:"由丈夫攙扶入診間，意識清醒但表情痛苦、躁動不安；臉部與雙下肢明顯水腫。過去病史：第一胎曾發生輕度子癇前症、足月自然生產；本次懷孕28週起血壓偏高（130–140/85–90 mmHg），產檢追蹤中。" },
+    acts:[
+      { id:"act1", label:"第一幕：急診初評",
+        intro:"血壓 174/112 mmHg（二次確認），頭痛持續，視野出現閃光感。",
+        decisionExam:{
+          id:"act1_decision", icon:"ti-stethoscope", label:"初步處置決策", labelEn:"Initial Management",
+          hint:"重度高血壓（≥160/110 mmHg）合併神經症狀，需要什麼樣的完整初評？",
+          report:null,
+          quiz:{
+            q:"血壓174/112 mmHg，持續頭痛＋視野閃光感＋右上腹痛，此時最正確的初步處置是？",
+            opts:["給予口服 nifedipine 10mg，囑咐休息30分鐘後再量血壓","立即啟動完整評估：建立IV管路、抽血（CBC/肝腎/LDH）、留尿蛋白、安排NST，同時準備急性重度高血壓之緊急降壓藥物","直接安排緊急剖腹產，不需等待任何檢查結果","給予MgSO₄ IV loading dose，觀察血壓是否下降"],
+            cor:1,
+            wrongExp:{ 0:"⚠️ 口服藥物起效過慢，在重度高血壓（≥160/110）情況下不可靠，且未同步評估血小板及肝功能。指引建議30–60分鐘內使用靜脈注射急救藥物並同步完整評估。", 2:"⚠️ 手術室準備期間，麻醉科需要血小板數量才能執行脊髓麻醉。術前評估不可省略，尤其凝血相關指標。", 3:"⚠️ MgSO₄ 的藥理機制為預防癲癇，並無降壓效果。必須與降壓治療同步使用，而非單獨替代。" },
+            exp:"重度子癇前症需同步進行兩條治療軌道：①立即建立IV通路，完整抽血評估（CBC/PLT、肝腎功能、LDH）、留尿蛋白/肌酐比、安排NST；②同時準備靜脈注射緊急降壓藥物（Labetalol IV 或 Hydralazine IV）。口服藥物、直接手術、單給MgSO₄ 均不恰當。"
+          }
+        },
+        exams:[
+          { id:"pe", icon:"ti-activity", label:"理學檢查", labelEn:"Physical Exam",
+            hint:"深腱反射與眼底鏡是重度子癇前症神經評估的重點。",
+            report:{ title:"理學檢查報告", rows:[["深腱反射（DTR）","3+ 雙側，踝陣攣 3 次","⚠️ 亢進"],["腹部觸診","右上腹（RUQ）壓痛明顯，無腹部硬板感","⚠️ 異常"],["神經學","無局部神經學缺損，無頸部僵硬","正常"],["眼底鏡","視網膜動脈輕度痙攣，視乳頭周邊亮反射增強","⚠️ 異常"]] },
+            quiz:{ q:"深腱反射3+合併踝陣攣，在子癇前症情境下，這代表什麼臨床意義？",
+              opts:["正常妊娠現象，不需特別處置","神經系統高度興奮，子癇（eclampsia）發作風險升高，MgSO₄ 預防治療更顯迫切","應立即安排腦部CT排除顱內出血","踝陣攣3次屬輕微，等待血液報告再評估"],
+              cor:1, exp:"踝陣攣是神經肌肉過度興奮的表現，在重度子癇前症中預示癲癇風險。結合視網膜動脈痙攣，強烈支持啟動MgSO₄ 治療。腦部CT在此情境非第一優先，除非有局部神經學缺損。" } },
+          { id:"labs", icon:"ti-test-pipe", label:"血液／尿液報告", labelEn:"Labs",
+            hint:"注意PLT、AST、LDH、Creatinine與尿蛋白——這些決定嚴重程度。",
+            report:{ title:"血液/尿液報告", rows:[["PLT","118,000/μL","↓ 偏低（正常 150,000–400,000/μL）"],["Creatinine","1.0 mg/dL","↑（妊娠正常 ≤0.8 mg/dL）"],["AST","68 U/L","↑（正常上限40 U/L，升高1.7倍）"],["ALT","52 U/L","↑ 輕度升高（正常 ≤40 U/L）"],["LDH","420 U/L","↑ 升高（正常 140–280 U/L）"],["蛋白/肌酐比（P/Cr）","1.8 mg/mg","⚠️ 嚴重升高（正常 <0.3 mg/mg）"]] },
+            quiz:{ q:"根據上述臨床發現與報告，此病人目前最正確的臨床診斷為？",
+              opts:["妊娠性高血壓（Gestational Hypertension）合併輕度蛋白尿","重度子癇前症（Preeclampsia with Severe Features）","HELLP 完全症候群（Full HELLP Syndrome）","慢性高血壓合併妊娠"],
+              cor:1, exp:"依ACOG準則，持續性收縮壓≥160 或舒張壓≥110，加上嚴重特徵之一即診斷重度子癇前症。本病人符合：①頭痛（acetaminophen無效）②視覺症狀③RUQ痛④AST升高⑤Creatinine偏高（相對妊娠值）。HELLP完全症候群需要PLT<100,000、LDH>600且有溶血證據，目前尚未完全達標，需密切監測。" } },
+          { id:"nst1", icon:"ti-wave-sine", label:"胎心音 NST", labelEn:"NST / EFM",
+            hint:"NST評估胎兒當前氧合，但不改變母體治療決策。",
+            ctgSvg: CTG_REACTIVE,
+            report:{ title:"NST 報告（20分鐘）", rows:[["基礎心率","148 bpm","正常"],["變異性","中度（6–25 bpm）","正常"],["加速反應","兩次達標","Reactive"],["減速","無晚期或變異性減速","正常"],["宮縮","偶發，不規律","尚未達早產臨界"]] },
+            quiz:{ q:"NST目前Reactive，此結果對接下來的母體治療決策有何影響？",
+              opts:["胎兒狀態良好，可暫緩母體降壓處置，先觀察1–2小時","胎兒目前穩定；但母體重度高血壓的緊急處置不因NST正常而延誤，必須立即進行","NST Reactive代表此病人可安全出院，門診追蹤","NST Reactive表示胎盤功能正常，不太可能是子癇前症"],
+              cor:1, exp:"NST Reactive確認胎兒短期狀態暫時穩定，但這完全不影響母體緊急降壓的優先性。重度高血壓≥160/110每分鐘都在增加腦出血風險，不可因胎兒暫穩而延誤母體處置。" } },
+        ]
+      },
+      { id:"act2", label:"第二幕：藥物治療",
+        intro:"初評完成，診斷確立。血壓172/114 mmHg（第三次確認），尿量28 mL/hr（輕度寡尿）。",
+        decisionExam:{
+          id:"act2_decision", icon:"ti-pill", label:"核心藥物治療決策", labelEn:"Drug Management",
+          hint:"降壓與預防癲癇是兩條並行的治療軌道，記得同步啟動。",
+          report:null,
+          quiz:{
+            q:"血壓172/114 mmHg 持續，尿量28 mL/hr，接下來最正確的處置是？",
+            opts:["先給予大量靜脈輸液（NS 1000mL 快速輸入）以改善寡尿，暫不給降壓藥","立即靜脈注射 Labetalol 20mg IV，同時啟動 MgSO₄ 負荷劑量（4g IV over 20min），與MFM及新生兒科會診討論類固醇促胎肺成熟","立即給予 MgSO₄ loading dose，等候血壓「自然」下降","給予口服 Nifedipine 30mg（長效型）觀察2小時"],
+            cor:1,
+            wrongExp:{ 0:"⚠️ 子癇前症的寡尿多為血管痙攣所致，並非真正低血容量。大量輸液極易誘發肺水腫（pulmonary edema）——血管內皮受損的子癇前症患者是最危險的醫源性錯誤之一。", 2:"⚠️ MgSO₄ 唯一作用是預防癲癇，對血壓無治療效果。未控制的重度高血壓持續數分鐘，腦出血與中風風險每分鐘上升。", 3:"⚠️ 口服長效Nifedipine起效緩慢（30–60分鐘），無法精準滴定。重度急性高血壓應優先使用IV Labetalol 或 IV Hydralazine。" },
+            exp:"重度子癇前症治療兩條並行軌道：①降壓軌道——Labetalol IV 20mg（可追加至40mg/80mg），目標<160/110，30–60分鐘內達標；②神經保護軌道——確診後立即啟動MgSO₄（4g loading + 1g/hr維持）。同時會診MFM、新生兒科，給予Betamethasone（妊娠<34週）。"
+          }
+        },
+        exams:[
+          { id:"drug_response", icon:"ti-pill", label:"藥物治療反應", labelEn:"Drug Response",
+            hint:"注意Labetalol的追加時機與MgSO₄ 毒性監測三要素。",
+            report:{ title:"藥物治療回應", rows:[["Labetalol 20mg IV","→ 15分鐘後 BP 158/104 mmHg","部分反應"],["Labetalol 40mg IV（追加）","→ 30分鐘後 BP 148/98 mmHg","✅ 達目標"],["MgSO₄ Loading","4g over 20分鐘","完成"],["MgSO₄ 維持劑量","1g/hr 靜脈滴注啟動","進行中"]] },
+            quiz:{ q:"關於MgSO₄ 的臨床使用，下列哪一項描述最正確？",
+              opts:["MgSO₄ 可有效降低收縮壓，是重度高血壓的首選治療","MgSO₄ 用於預防子癇（eclampsia），毒性監測包含：深腱反射存在、呼吸速率≥12次/分、尿量充足；若出現毒性，以Calcium Gluconate 10% 1g IV解毒","MgSO₄ 在血小板<100,000/μL時應立即停用，改換其他抗癲癇藥物"],
+              cor:1, exp:"MgSO₄ 唯一有實證的適應症是預防癲癇，並非降壓。血鎂治療濃度4–7 mEq/L；>9–12 mEq/L導致DTR消失與呼吸抑制；>15 mEq/L可能心跳停止。毒性監測三要素：①DTR仍存在②RR≥12次/分③尿量≥25–30 mL/hr。解毒劑：10% Calcium Gluconate 1g IV over 10分鐘備妥床旁。血小板低下是評估脊髓麻醉風險的指標，非停用MgSO₄ 的依據。" } },
+          { id:"steroid_consult", icon:"ti-users", label:"類固醇與會診記錄", labelEn:"Steroids & Consult",
+            hint:"妊娠<34週，類固醇促胎肺成熟不可遺漏。",
+            report:{ title:"類固醇與會診記錄", rows:[["Betamethasone","12mg IM 第一劑已給予","妊娠<34週促胎肺成熟"],["MFM會診","確認診斷，討論48hr類固醇療程後是否終止","完成"],["新生兒科","33週早產兒預後告知，NICU備妥","完成"],["MgSO₄ 毒性監測（即時）","DTR 2+，RR 16，尿量稍低","持續監測中"]] },
+            quiz:{ q:"Betamethasone在此病人使用的主要目的是什麼？",
+              opts:["降低母體血壓，減少子癇前症嚴重度","促進胎兒肺部表面張力素（surfactant）合成，降低早產兒呼吸窘迫症候群（RDS）的發生率","預防產後出血","減少胎兒腦部出血風險（此為主要適應症）"],
+              cor:1, exp:"Betamethasone（或Dexamethasone）在妊娠34週前用於促進胎兒肺成熟，主要降低早產兒RDS（呼吸窘迫症候群）的嚴重程度，同時也有助於降低IVH（腦室內出血）與NEC（壞死性腸炎）的風險，但「促肺成熟」是最主要的適應症。" } },
+        ]
+      },
+      { id:"act3", label:"第三幕：病情惡化與產科決策",
+        intro:"入院後第14小時：血壓162/108 mmHg，PLT驟降至82,000/μL，AST 148 U/L，LDH 720 U/L，周邊血抹片發現破碎紅血球（schistocytes）。NST出現反覆晚期減速，變異性<5 bpm。",
+        decisionExam:{
+          id:"act3_decision", icon:"ti-alert-triangle", label:"緊急產科決策", labelEn:"Emergency Delivery Decision",
+          hint:"HELLP進展合併胎兒窘迫，每一分鐘都關鍵。",
+          report:{ title:"緊急更新報告（入院第14小時）", rows:[["PLT（複查）","82,000/μL","⚠️ ↓ 驟降（正常 150,000–400,000/μL；6小時內↓36,000）"],["AST（複查）","148 U/L","⚠️ ↑ 急升（正常 ≤40 U/L，此為3.7倍）"],["LDH（複查）","720 U/L","⚠️ ↑ 升高（正常 140–280 U/L）"],["周邊血液抹片","發現破碎紅血球（schistocytes）","⚠️ 溶血證據"],["NST","反覆晚期減速，變異性<5 bpm","⚠️ 胎兒窘迫（正常變異性 6–25 bpm）"],["尿量（前4小時）","62 mL（15.5 mL/hr）","⚠️ 明顯寡尿（正常 ≥30 mL/hr）"]] },
+          quiz:{
+            q:"面對上述惡化的母胎雙方情況，最正確的處置是？",
+            opts:["繼續等待第二劑類固醇（24小時後）再評估，調整MgSO₄ 劑量，暫不介入","立即通知手術室準備緊急剖腹生產；確認血小板（評估麻醉方式）、備血（2 units PRBCs）、新生兒科到場，MgSO₄ 持續至產後24小時","立即嘗試催生（引產），以Oxytocin促進子宮收縮","轉介ICU進行血液動力學監測，等待主治醫師查房後再決定"],
+            cor:1,
+            wrongExp:{ 0:"⚠️ 當出現HELLP進展（schistocytes+LDH>600+PLT驟降）合併反覆晚期減速時，等待類固醇完整療程不再是優先考量——宮內環境惡化已超過等待的風險。", 2:"⚠️ 重度子癇前症合併進行性HELLP且胎心音出現不可緩解的晚期減速時，剖腹生產比引產更迅速安全；催產素可能加重子宮胎盤循環不良。", 3:"⚠️ 在生命徵象與胎兒狀況同步惡化的急症中，每一分鐘的延誤都可能造成不可挽回的結果。此時必須立即行動，不可等待查房。" },
+            exp:"PLT 82,000/μL+LDH 720+schistocytes = HELLP症候群確立。合併NST晚期減速，無論孕週，均須立即終止妊娠。PLT 82,000處於邊界，麻醉科評估後採全身麻醉；MgSO₄ 持續至產後至少24小時；備血2 units PRBCs + FFP；新生兒科到場。"
+          }
+        },
+        exams:[
+          { id:"delivery", icon:"ti-baby-carriage", label:"手術結果與產後狀態", labelEn:"Delivery Outcome",
+            hint:"產後24–48小時仍是子癇發作的高風險期。",
+            ctgSvg: CTG_LATE_DECEL,
+            report:{ title:"手術結果與產後即時報告", rows:[["麻醉方式","全身麻醉（PLT 82,000處於邊界，評估後決定）",""],["備血","2 units PRBCs + 2 units FFP","備用"],["手術時間","38分鐘","順利"],["術中出血量","480 mL","無需輸血"],["新生兒","男嬰，1,820g，Apgar 7/8（1min/5min）","轉入NICU"],["術後BP（2小時）","152/100 mmHg","仍需降壓藥維持"],["術後尿量（2小時）","85 mL（42.5 mL/hr）","改善中"]] },
+            quiz:{ q:"產後照護中，MgSO₄ 應持續使用至何時？",
+              opts:["胎盤娩出即可停止，因子癇前症已隨分娩完全緩解","持續至術後24小時，因產後初期仍是子癇發作的高風險期","持續至產後24–48小時，且每4–6小時重新評估毒性監測指標，直至血壓趨於穩定"],
+              cor:2, exp:"子癇前症並不會在胎盤娩出的瞬間立即緩解——產後24–48小時仍是子癇發作的高風險窗口，尤其血壓在產後第1–2天可能因第三空間液體回流而進一步升高。MgSO₄ 持續至產後至少24小時，部分重度（尤其HELLP）可延至48小時。毒性監測（DTR、RR、尿量）每小時評估不可中斷。停藥需基於整體臨床改善，而非單純以時鐘計時。" } },
+        ]
+      }
+    ]
+  }
+];
+
+function Block({ color="#E6F1FB", border="#B5D4F4", icon, title, accent="#185FA5", children, style={} }) {
+  return (
+    <div style={{ background:color, border:`1.5px solid ${border}`, borderRadius:12, padding:"14px 16px", marginBottom:14, ...style }}>
+      {title && (
+        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10, paddingBottom:8, borderBottom:`1px solid ${border}` }}>
+          {icon && <i className={`ti ${icon}`} style={{ fontSize:14, color:accent }} aria-hidden="true"></i>}
+          <span style={{ fontSize:11, fontWeight:500, letterSpacing:"0.07em", textTransform:"uppercase", color:accent }}>{title}</span>
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function BackBtn({ onClick, label="返回" }) {
+  return (
+    <button onClick={onClick} style={{ display:"inline-flex", alignItems:"center", gap:4, background:"none", border:"none", cursor:"pointer", color:"#5F5E5A", fontSize:13, padding:"0 0 14px", marginBottom:2 }}>
+      <i className="ti ti-arrow-left" aria-hidden="true"></i> {label}
+    </button>
+  );
+}
+
+function StepIndicator({ steps, current }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", marginBottom:24 }}>
+      {steps.map((s,i) => {
+        const done=i<current, active=i===current;
+        return (
+          <div key={s} style={{ display:"flex", alignItems:"center", flex:i<steps.length-1?1:"none" }}>
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+              <div style={{ width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:500, background:done?"#3B6D11":active?"#185FA5":"#D3D1C7", color:done||active?"#fff":"#888780", border:active?"2px solid #0D3F73":"none" }}>
+                {done ? <i className="ti ti-check" style={{ fontSize:12 }} aria-hidden="true"></i> : i+1}
+              </div>
+              <span style={{ fontSize:10, color:active?"#185FA5":done?"#3B6D11":"#888780", fontWeight:active?500:400, whiteSpace:"nowrap" }}>{s}</span>
+            </div>
+            {i<steps.length-1 && <div style={{ flex:1, height:2, background:done?"#3B6D11":"#D3D1C7", margin:"0 5px", marginBottom:16 }}></div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReportTable({ rows }) {
+  return (
+    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+      <tbody>
+        {rows.map(([k,v,note],i)=>(
+          <tr key={i} style={{ borderBottom:i<rows.length-1?"1px solid rgba(0,0,0,0.06)":"none" }}>
+            <td style={{ padding:"8px 8px", color:"#185FA5", width:"34%", fontWeight:500, verticalAlign:"top" }}>{k}</td>
+            <td style={{ padding:"8px 8px", verticalAlign:"top" }}>{v}</td>
+            <td style={{ padding:"8px 8px", fontSize:12, verticalAlign:"top", color:note&&(note.startsWith("⚠️")||note.startsWith("↓")||note.startsWith("↑"))?"#A32D2D":note&&note.startsWith("✅")?"#3B6D11":"#5F5E5A" }}>{note}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ReportView({ item, onClose }) {
+  return (
+    <div style={{ padding:"1.5rem" }}>
+      <BackBtn onClick={onClose} label="返回遊戲" />
+      <Block color="#E6F1FB" border="#B5D4F4" icon="ti-file-text" title={item.label} accent="#185FA5">
+        {item.report && <ReportTable rows={item.report.rows} />}
+      </Block>
+    </div>
+  );
+}
+
+function SelectDifficulty({ onSelect }) {
+  return (
+    <div style={{ padding:"2rem 1.5rem", maxWidth:540, margin:"0 auto" }}>
+      <StepIndicator steps={["選難度","選模式","選關卡"]} current={0} />
+      <h2 style={{ fontSize:20, fontWeight:500, margin:"0 0 6px" }}>選擇難度</h2>
+      <p style={{ fontSize:13, color:"#5F5E5A", margin:"0 0 18px" }}>難度影響線索明顯程度、提示與情境複雜度。</p>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {DIFFS.map(d=>(
+          <button key={d.id} onClick={()=>onSelect(d.id)} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", background:"#fff", border:"1.5px solid #D3D1C7", borderRadius:12, cursor:"pointer", textAlign:"left" }}>
+            <span style={{ fontSize:24 }}>{d.emoji}</span>
+            <div style={{ flex:1 }}>
+              <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:3 }}>
+                <span style={{ fontSize:15, fontWeight:500, color:d.color }}>{d.label}</span>
+                <span style={{ fontSize:12, color:"#888780" }}>{d.labelEn}</span>
+              </div>
+              <p style={{ fontSize:12, color:"#5F5E5A", margin:0 }}>{d.desc}</p>
+            </div>
+            <i className="ti ti-chevron-right" style={{ fontSize:16, color:"#B4B2A9" }} aria-hidden="true"></i>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SelectMode({ difficulty, onSelect, onBack }) {
+  const dc=DC[difficulty];
+  return (
+    <div style={{ padding:"2rem 1.5rem", maxWidth:540, margin:"0 auto" }}>
+      <BackBtn onClick={onBack} label="返回選難度" />
+      <StepIndicator steps={["選難度","選模式","選關卡"]} current={1} />
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+        <span style={{ fontSize:11, padding:"3px 9px", borderRadius:6, background:dc.bg, color:dc.color, fontWeight:500, border:`1px solid ${dc.border}` }}>{dc.label}</span>
+      </div>
+      <h2 style={{ fontSize:20, fontWeight:500, margin:"0 0 6px" }}>選擇模式</h2>
+      <p style={{ fontSize:13, color:"#5F5E5A", margin:"0 0 18px" }}>模式影響遊戲進行方式與挑戰類型。</p>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {MODES.map(m=>(
+          <button key={m.id} onClick={()=>!m.locked&&onSelect(m.id)} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", background:"#fff", border:"1.5px solid #D3D1C7", borderRadius:12, cursor:m.locked?"default":"pointer", textAlign:"left", opacity:m.locked?0.45:1 }}>
+            <div style={{ width:40, height:40, borderRadius:10, background:"#E6F1FB", border:"1px solid #B5D4F4", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <i className={`ti ${m.icon}`} style={{ fontSize:18, color:"#185FA5" }} aria-hidden="true"></i>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:3 }}>
+                <span style={{ fontSize:14, fontWeight:500 }}>{m.label}</span>
+                {m.locked && <span style={{ fontSize:11, color:"#B4B2A9" }}>（即將推出）</span>}
+              </div>
+              <p style={{ fontSize:12, color:"#5F5E5A", margin:0 }}>{m.desc}</p>
+            </div>
+            {m.locked ? <i className="ti ti-lock" style={{ fontSize:14, color:"#B4B2A9" }} aria-hidden="true"></i>
+                      : <i className="ti ti-chevron-right" style={{ fontSize:16, color:"#B4B2A9" }} aria-hidden="true"></i>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SelectCase({ difficulty, mode, onSelect, onBack }) {
+  const dc=DC[difficulty];
+  const cases=ALL_CASES.filter(c=>c.difficulties.includes(difficulty));
+  return (
+    <div style={{ padding:"2rem 1.5rem", maxWidth:600, margin:"0 auto" }}>
+      <BackBtn onClick={onBack} label="返回選模式" />
+      <StepIndicator steps={["選難度","選模式","選關卡"]} current={2} />
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+        <span style={{ fontSize:11, padding:"3px 9px", borderRadius:6, background:dc.bg, color:dc.color, fontWeight:500, border:`1px solid ${dc.border}` }}>{dc.label}</span>
+        <span style={{ fontSize:11, color:"#888780" }}>·</span>
+        <span style={{ fontSize:11, color:"#888780" }}>{MODES.find(m=>m.id===mode)?.label}</span>
+      </div>
+      <h2 style={{ fontSize:20, fontWeight:500, margin:"0 0 6px" }}>選擇關卡</h2>
+      <p style={{ fontSize:13, color:"#5F5E5A", margin:"0 0 18px" }}>依臨床表現選擇，完成所有檢查後才揭曉診斷。</p>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {cases.map(c=>(
+          <button key={c.id} onClick={()=>onSelect(c)} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", background:"#fff", border:"1.5px solid #D3D1C7", borderRadius:12, cursor:"pointer", textAlign:"left" }}>
+            <div style={{ width:44, height:44, borderRadius:10, background:"#E6F1FB", border:"1px solid #B5D4F4", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <i className={`ti ${c.icon}`} style={{ fontSize:20, color:"#185FA5" }} aria-hidden="true"></i>
+            </div>
+            <div style={{ flex:1 }}>
+              <p style={{ fontSize:14, fontWeight:500, margin:"0 0 3px" }}>{c.caseLabel}</p>
+              <p style={{ fontSize:12, color:"#888780", margin:"0 0 2px", fontStyle:"italic" }}>{c.caseLabelEn}</p>
+              <p style={{ fontSize:12, color:"#5F5E5A", margin:0 }}>{c.acts.length} 幕 · {c.acts.reduce((a,act)=>a+(act.exams?.length||0)+(act.decisionExam?1:0),0)} 項判斷</p>
+            </div>
+            <i className="ti ti-chevron-right" style={{ fontSize:16, color:"#B4B2A9" }} aria-hidden="true"></i>
+          </button>
+        ))}
+        <div style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", background:"#F7F6F2", border:"1.5px dashed #D3D1C7", borderRadius:12, opacity:0.5 }}>
+          <div style={{ width:44, height:44, borderRadius:10, background:"#EDECE8", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <i className="ti ti-lock" style={{ fontSize:20, color:"#888780" }} aria-hidden="true"></i>
+          </div>
+          <div>
+            <p style={{ fontSize:14, fontWeight:500, margin:"0 0 3px" }}>更多關卡即將推出</p>
+            <p style={{ fontSize:12, color:"#888780", margin:0 }}>早產、胎兒窘迫、產後大出血…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GameScreen({ cas, difficulty, mode, onBack }) {
+  const [actIdx, setActIdx] = useState(0);
+  const [phase, setPhase] = useState("decision");
+  const [examIdx, setExamIdx] = useState(0);
+  const [chosen, setChosen] = useState(null);
+  const [score, setScore] = useState(0);
+  const [completedItems, setCompletedItems] = useState([]);
+  const [reviewItem, setReviewItem] = useState(null);
+  const topRef = useRef(null);
+  const dc = DC[difficulty];
+  const showHints = difficulty==="student";
+  const act = cas.acts[actIdx];
+  const hasDecision = !!act.decisionExam;
+  const exams = act.exams || [];
+  const currentExam = exams[examIdx];
+  const allActsDone = actIdx >= cas.acts.length;
+
+  function scrollTop() { topRef.current?.scrollIntoView({behavior:"smooth"}); }
+
+  function submitDecision(idx) {
+    const de = act.decisionExam;
+    if(idx === de.quiz.cor) { setChosen(idx); setScore(s=>s+10); setPhase("exams"); scrollTop(); }
+    else { setChosen(idx); setScore(s=>s-5); setPhase("decision_wrong"); scrollTop(); }
+  }
+
+  function submitQuiz(idx) {
+    setChosen(idx);
+    setScore(s=>idx===currentExam.quiz.cor?s+10:s-5);
+    setPhase("feedback"); scrollTop();
+  }
+
+  function nextExam() {
+    setCompletedItems(prev=>[...prev,{id:currentExam.id, label:currentExam.label, report:currentExam.report}]);
+    if(examIdx+1 < exams.length) { setExamIdx(examIdx+1); setChosen(null); setPhase("exam_report"); scrollTop(); }
+    else if(actIdx+1 < cas.acts.length) { setActIdx(actIdx+1); setExamIdx(0); setChosen(null); setPhase("decision"); scrollTop(); }
+    else { setPhase("complete"); scrollTop(); }
+  }
+
+  function startExams() { setExamIdx(0); setChosen(null); setPhase("exam_report"); scrollTop(); }
+
+  if(reviewItem) return <ReportView item={reviewItem} onClose={()=>setReviewItem(null)} />;
+
+  return (
+    <div style={{ display:"flex", minHeight:560 }}>
+      <div style={{ width:172, flexShrink:0, background:"#F1EFE8", borderRight:"1.5px solid #D3D1C7", display:"flex", flexDirection:"column", padding:"12px" }}>
+        <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:4, background:"none", border:"none", cursor:"pointer", color:"#5F5E5A", fontSize:12, padding:"0 0 10px", marginBottom:10, borderBottom:"1px solid #D3D1C7" }}>
+          <i className="ti ti-arrow-left" aria-hidden="true"></i> 重新選擇
+        </button>
+        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:10 }}>
+          <span style={{ fontSize:10, padding:"2px 6px", borderRadius:5, background:dc.bg, color:dc.color, border:`1px solid ${dc.border}`, fontWeight:500 }}>{dc.label}</span>
+          <span style={{ fontSize:10, padding:"2px 6px", borderRadius:5, background:"#E6F1FB", color:"#185FA5", border:"1px solid #B5D4F4" }}>{MODES.find(m=>m.id===mode)?.label}</span>
+        </div>
+        <p style={{ fontSize:10, fontWeight:500, color:"#888780", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:6 }}>進度</p>
+        {cas.acts.map((a,i)=>(
+          <div key={a.id} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5, fontSize:11 }}>
+            <div style={{ width:16, height:16, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", background:i<actIdx?"#3B6D11":i===actIdx?"#185FA5":"#D3D1C7", flexShrink:0 }}>
+              {i<actIdx ? <i className="ti ti-check" style={{ fontSize:9, color:"#fff" }} aria-hidden="true"></i>
+                        : <span style={{ fontSize:9, color:"#fff", fontWeight:500 }}>{i+1}</span>}
+            </div>
+            <span style={{ color:i===actIdx?"#185FA5":i<actIdx?"#3B6D11":"#888780", fontWeight:i===actIdx?500:400, lineHeight:1.3 }}>{a.label}</span>
+          </div>
+        ))}
+        <p style={{ fontSize:10, fontWeight:500, color:"#888780", letterSpacing:"0.07em", textTransform:"uppercase", margin:"12px 0 6px" }}>已完成項目</p>
+        {completedItems.length===0 && <p style={{ fontSize:11, color:"#B4B2A9" }}>尚無</p>}
+        {completedItems.map(c=>(
+          <button key={c.id} onClick={()=>c.report&&setReviewItem(c)} style={{ display:"flex", alignItems:"center", gap:5, width:"100%", textAlign:"left", background:"#fff", border:"1px solid #D3D1C7", borderRadius:7, padding:"6px 8px", marginBottom:5, cursor:c.report?"pointer":"default", fontSize:11 }}>
+            <i className="ti ti-check" style={{ color:"#3B6D11", fontSize:12, flexShrink:0 }} aria-hidden="true"></i>
+            <span style={{ flex:1, lineHeight:1.3 }}>{c.label}</span>
+            {c.report && <i className="ti ti-chevron-right" style={{ color:"#B4B2A9", fontSize:11 }} aria-hidden="true"></i>}
+          </button>
+        ))}
+        <div style={{ marginTop:"auto", paddingTop:12, borderTop:"1px solid #D3D1C7" }}>
+          <p style={{ fontSize:10, color:"#888780", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:2 }}>得分</p>
+          <p style={{ fontSize:28, fontWeight:500, margin:0, color:score>=0?"#3B6D11":"#A32D2D" }}>{score}</p>
+        </div>
+      </div>
+
+      <div ref={topRef} style={{ flex:1, padding:"1.25rem 1.5rem", overflowY:"auto" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+          <span style={{ fontSize:15, fontWeight:500 }}>{allActsDone||phase==="complete" ? cas.title : cas.caseLabel}</span>
+          <span style={{ fontSize:13, color:"#5F5E5A", fontStyle:"italic" }}>{allActsDone||phase==="complete" ? cas.titleEn : cas.caseLabelEn}</span>
+          {phase==="complete" && <span style={{ fontSize:11, padding:"2px 8px", background:"#EAF3DE", color:"#3B6D11", border:"1px solid #C0DD97", borderRadius:6 }}>✓ 診斷揭曉</span>}
+        </div>
+
+        <Block color="#E6F1FB" border="#B5D4F4" icon="ti-user" title="病人資料" accent="#185FA5">
+          <p style={{ fontSize:14, margin:"0 0 10px" }}>{cas.patient.age}歲，G{cas.patient.gravida}P{cas.patient.para}，孕{cas.patient.ega}</p>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            {Object.entries(cas.patient.vitals).map(([k,v])=>(
+              <div key={k} style={{ background:"#fff", border:"1px solid #B5D4F4", borderRadius:8, padding:"6px 12px", textAlign:"center" }}>
+                <p style={{ fontSize:10, color:"#185FA5", margin:"0 0 2px", textTransform:"uppercase", letterSpacing:"0.04em" }}>{k}</p>
+                <p style={{ fontSize:13, fontWeight:500, margin:0 }}>{v}</p>
+              </div>
+            ))}
+          </div>
+          {cas.patient.context && <p style={{ fontSize:12, color:"#5F5E5A", margin:"10px 0 0", lineHeight:1.6, borderTop:"1px solid #B5D4F4", paddingTop:8 }}>{cas.patient.context}</p>}
+        </Block>
+
+        <Block color="#EAF3DE" border="#C0DD97" icon="ti-message-2" title="主訴 / Chief Complaint" accent="#3B6D11">
+          <p style={{ fontSize:14, lineHeight:1.75, margin:"0 0 4px" }}>{cas.patient.chief}</p>
+          <p style={{ fontSize:12, color:"#5F5E5A", margin:0, fontStyle:"italic" }}>{cas.patient.chiefEn}</p>
+        </Block>
+
+        {!allActsDone && act.intro && (
+          <Block color="#FCEBEB" border="#F7C1C1" icon="ti-alert-circle" title={`${act.label} — 當前情境`} accent="#A32D2D">
+            <p style={{ fontSize:13, lineHeight:1.7, margin:0 }}>{act.intro}</p>
+            {act.decisionExam?.report && <div style={{ marginTop:12 }}><ReportTable rows={act.decisionExam.report.rows}/></div>}
+          </Block>
+        )}
+
+        {(phase==="decision"||phase==="decision_wrong") && hasDecision && !allActsDone && (
+          <>
+            {showHints && act.decisionExam.hint && (
+              <div style={{ display:"flex", gap:8, background:"#FAEEDA", border:"1px solid #FAC775", borderRadius:8, padding:"8px 12px", marginBottom:12, fontSize:12, color:"#854F0B" }}>
+                <i className="ti ti-bulb" style={{ flexShrink:0, fontSize:14 }} aria-hidden="true"></i>
+                <span>{act.decisionExam.hint}</span>
+              </div>
+            )}
+            <Block color="#FAEEDA" border="#FAC775" icon="ti-brain" title="臨床處置決策" accent="#854F0B">
+              <p style={{ fontSize:14, lineHeight:1.75, margin:"0 0 12px" }}>{act.decisionExam.quiz.q}</p>
+              {phase==="decision_wrong" && chosen!==null && (
+                <div style={{ background:"#FCEBEB", border:"1px solid #F7C1C1", borderRadius:8, padding:"10px 14px", marginBottom:12, fontSize:13, color:"#A32D2D", lineHeight:1.6 }}>
+                  <strong>✗ 不正確（−5分）</strong><br/>
+                  {act.decisionExam.quiz.wrongExp?.[chosen] || "請重新選擇正確的處置。"}
+                </div>
+              )}
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {act.decisionExam.quiz.opts.map((opt,i)=>(
+                  <button key={i} onClick={()=>submitDecision(i)} style={{ textAlign:"left", padding:"11px 14px", borderRadius:9, border:"1.5px solid #D3D1C7", background:"#fff", cursor:"pointer", fontSize:13, lineHeight:1.6, display:"flex", gap:10 }}>
+                    <span style={{ fontWeight:500, color:"#888780", minWidth:20 }}>{String.fromCharCode(65+i)}.</span>
+                    <span>{opt}</span>
+                  </button>
+                ))}
+              </div>
+            </Block>
+          </>
+        )}
+
+        {phase==="exams" && !allActsDone && (
+          <Block color="#E6F1FB" border="#B5D4F4" icon="ti-stethoscope" title="解鎖：進行詳細評估" accent="#185FA5">
+            <p style={{ fontSize:13, color:"#185FA5", margin:"0 0 12px" }}>正確處置！接下來逐步完成本幕的評估項目。</p>
+            <button onClick={startExams} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"9px 18px", background:"#185FA5", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:500 }}>
+              <i className="ti ti-arrow-right" aria-hidden="true"></i>開始評估
+            </button>
+          </Block>
+        )}
+
+        {phase==="exam_report" && currentExam && (
+          <Block color="#E6F1FB" border="#B5D4F4" icon="ti-clipboard-text" title={`檢查結果 — ${currentExam.label}`} accent="#185FA5">
+            <BackBtn onClick={()=>setPhase("exams")} label="返回評估列表" />
+            {showHints && currentExam.hint && (
+              <div style={{ display:"flex", gap:8, background:"#FAEEDA", border:"1px solid #FAC775", borderRadius:8, padding:"8px 12px", marginBottom:12, fontSize:12, color:"#854F0B" }}>
+                <i className="ti ti-bulb" style={{ flexShrink:0, fontSize:14 }} aria-hidden="true"></i>
+                <span>{currentExam.hint}</span>
+              </div>
+            )}
+            {currentExam.ctgSvg && (
+              <div style={{ marginBottom:14 }}>
+                <p style={{ fontSize:11, fontWeight:500, color:"#185FA5", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>
+                  <i className="ti ti-chart-line" style={{ marginRight:4 }} aria-hidden="true"></i>CTG 圖紙
+                </p>
+                <div style={{ borderRadius:8, border:"1px solid #B5D4F4", overflow:"hidden" }} dangerouslySetInnerHTML={{ __html: currentExam.ctgSvg }} />
+              </div>
+            )}
+            {currentExam.report && <div style={{ marginBottom:12 }}><ReportTable rows={currentExam.report.rows}/></div>}
+            <button onClick={()=>setPhase("quiz")} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"9px 18px", background:"#185FA5", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:500 }}>
+              <i className="ti ti-brain" aria-hidden="true"></i>進行判讀
+            </button>
+          </Block>
+        )}
+
+        {phase==="quiz" && currentExam && (
+          <>
+            <Block color="#FAEEDA" border="#FAC775" icon="ti-brain" title="臨床判斷" accent="#854F0B">
+              <BackBtn onClick={()=>setPhase("exam_report")} label="返回報告" />
+              <p style={{ fontSize:14, lineHeight:1.75, margin:0 }}>{currentExam.quiz.q}</p>
+            </Block>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {currentExam.quiz.opts.map((opt,i)=>(
+                <button key={i} onClick={()=>submitQuiz(i)} style={{ textAlign:"left", padding:"11px 14px", borderRadius:9, border:"1.5px solid #D3D1C7", background:"#fff", cursor:"pointer", fontSize:13, lineHeight:1.6, display:"flex", gap:10 }}>
+                  <span style={{ fontWeight:500, color:"#888780", minWidth:20 }}>{String.fromCharCode(65+i)}.</span>
+                  <span>{opt}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {phase==="feedback" && currentExam && (
+          <Block color={chosen===currentExam.quiz.cor?"#EAF3DE":"#FCEBEB"} border={chosen===currentExam.quiz.cor?"#C0DD97":"#F7C1C1"}>
+            <p style={{ fontWeight:500, fontSize:15, color:chosen===currentExam.quiz.cor?"#3B6D11":"#A32D2D", marginBottom:8 }}>
+              {chosen===currentExam.quiz.cor?"✓ 正確！+10 分":"✗ 答案有誤 −5 分"}
+            </p>
+            <p style={{ fontSize:13, lineHeight:1.75, margin:"0 0 10px" }}>{currentExam.quiz.exp}</p>
+            <p style={{ fontSize:12, color:"#5F5E5A", margin:"0 0 14px", padding:"8px 12px", background:"rgba(255,255,255,0.6)", borderRadius:8 }}>
+              正確答案：<strong>{String.fromCharCode(65+currentExam.quiz.cor)}. {currentExam.quiz.opts[currentExam.quiz.cor]}</strong>
+            </p>
+            <button onClick={nextExam} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"9px 18px", background:"#fff", border:"1.5px solid #D3D1C7", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:500 }}>
+              <i className="ti ti-arrow-right" aria-hidden="true"></i>
+              {examIdx+1<exams.length ? "下一個評估項目" : actIdx+1<cas.acts.length ? "進入下一幕" : "完成關卡"}
+            </button>
+          </Block>
+        )}
+
+        {phase==="complete" && (
+          <Block color="#FAEEDA" border="#FAC775">
+            <div style={{ textAlign:"center", padding:"1rem 0" }}>
+              <i className="ti ti-trophy" style={{ fontSize:42, color:"#854F0B", display:"block", marginBottom:10 }} aria-hidden="true"></i>
+              <p style={{ fontSize:20, fontWeight:500, margin:"0 0 4px" }}>關卡完成！</p>
+              <p style={{ fontSize:14, color:"#3B6D11", fontWeight:500, margin:"0 0 6px" }}>診斷：{cas.title}（{cas.titleEn}）</p>
+              <p style={{ fontSize:15, color:"#5F5E5A", margin:"0 0 16px" }}>最終得分：<strong style={{ fontSize:24 }}>{score}</strong> 分</p>
+              <button onClick={onBack} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"9px 18px", background:"#fff", border:"1.5px solid #D3D1C7", borderRadius:8, cursor:"pointer", fontSize:13 }}>
+                <i className="ti ti-arrow-left" aria-hidden="true"></i>重新選擇
+              </button>
+            </div>
+          </Block>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [step, setStep] = useState("difficulty");
+  const [difficulty, setDifficulty] = useState(null);
+  const [mode, setMode] = useState(null);
+  const [activeCase, setActiveCase] = useState(null);
+  function reset() { setStep("difficulty"); setDifficulty(null); setMode(null); setActiveCase(null); }
+  if(activeCase) return <GameScreen cas={activeCase} difficulty={difficulty} mode={mode} onBack={reset} />;
+  if(step==="difficulty") return <SelectDifficulty onSelect={d=>{ setDifficulty(d); setStep("mode"); }} />;
+  if(step==="mode") return <SelectMode difficulty={difficulty} onSelect={m=>{ setMode(m); setStep("case"); }} onBack={()=>setStep("difficulty")} />;
+  if(step==="case") return <SelectCase difficulty={difficulty} mode={mode} onSelect={c=>setActiveCase(c)} onBack={()=>setStep("mode")} />;
+}
